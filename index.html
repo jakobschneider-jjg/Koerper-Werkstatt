@@ -1,0 +1,920 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Körper-Werkstatt</title>
+<style>
+/* Layout: Heft-Look. Karopapier-Bühne links, Zählbrett rechts; auf schmalen Geräten untereinander. */
+:root{
+  --paper:#f5f7fb;
+  --panel:#ffffff;
+  --karo:#dfe7f2;
+  --ink:#1b2636;
+  --muted:#56657a;
+  --line:#d3dce9;
+  --accent:#2a5fc4;
+  --c-face:#2a5fc4;
+  --c-edge:#d9670a;
+  --c-vertex:#c9245a;
+  --ok:#157a44;
+  --ok-bg:#e3f4ea;
+  --warn:#9c2a1f;
+  --warn-bg:#fbe9e6;
+  --hint-bg:#fff5d6;
+  --font:ui-rounded,"SF Pro Rounded","Nunito","Segoe UI Rounded","Segoe UI",system-ui,-apple-system,sans-serif;
+  --r:14px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--paper);color:var(--ink)}
+body{margin:0;font-family:var(--font);font-size:16px;line-height:1.45}
+button{font:inherit;color:inherit}
+.app{max-width:1240px;margin:0 auto;padding-inline:16px;padding-block:14px 28px;display:flex;flex-direction:column;gap:14px}
+
+.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 20px}
+.top h1{margin:0;font-size:clamp(24px,3.2vw,34px);letter-spacing:-.01em;font-weight:800;text-wrap:balance}
+.top h1 span{color:var(--accent)}
+.top p{margin:0;color:var(--muted);font-size:15px}
+
+.picker{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.pick{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:92px;padding:8px 10px 8px;border:2px solid var(--line);background:var(--panel);border-radius:var(--r);cursor:pointer;transition:border-color .15s,transform .15s}
+.pick:hover{border-color:#9fb5d9}
+.pick[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 3px #2a5fc41f}
+.pick canvas{width:64px;height:52px}
+.pick b{font-size:15px}
+.pick .done{font-size:12px;color:var(--ok);height:16px}
+
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:16px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
+
+.stagewrap{display:flex;flex-direction:column;gap:10px;min-width:0}
+.stage{position:relative;width:100%;aspect-ratio:16/10;max-width:100%;border-radius:var(--r);border:2px solid var(--line);overflow:hidden;
+  background-color:#fbfcfe;
+  background-image:linear-gradient(var(--karo) 1px,transparent 1px),linear-gradient(90deg,var(--karo) 1px,transparent 1px);
+  background-size:22px 22px;background-position:-1px -1px;touch-action:none;cursor:grab}
+@media (max-width:560px){.stage{aspect-ratio:1/1}}
+.stage.dragging{cursor:grabbing}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.dragtip{position:absolute;right:10px;bottom:10px;font-size:12.5px;color:var(--muted);background:#ffffffd9;border-radius:999px;padding:3px 10px;pointer-events:none}
+.groupline{position:absolute;left:10px;top:10px;max-width:calc(100% - 20px);background:#ffffffee;border:2px solid var(--line);border-radius:12px;padding:6px 12px;font-weight:700;font-size:clamp(15px,1.8vw,19px);font-variant-numeric:tabular-nums;pointer-events:none}
+.groupline .n{display:inline-block;min-width:1.2em;text-align:center;border-radius:8px;color:#fff;padding:0 6px;margin-left:3px}
+
+.caption{margin:0;min-height:3.2em;font-size:clamp(18px,2.1vw,24px);font-weight:600;line-height:1.35;text-wrap:balance;padding:10px 14px;background:var(--panel);border:2px solid var(--line);border-radius:var(--r)}
+
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:8px;min-height:48px;padding:0 16px;border-radius:12px;border:2px solid var(--line);background:var(--panel);cursor:pointer;font-weight:700;font-size:16px}
+.btn:hover:not(:disabled){border-color:#9fb5d9}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover:not(:disabled){background:#224fa6;border-color:#224fa6}
+.btn svg{width:22px;height:22px;flex:none}
+.btn[aria-pressed="true"]{background:#e8effb;border-color:var(--accent);color:#16397a}
+.spacer{flex:1 1 auto}
+.seg{display:inline-flex;border:2px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
+.seg button{border:0;background:transparent;min-height:44px;padding:0 12px;cursor:pointer;font-weight:700;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:#e8effb;color:#16397a}
+:focus-visible{outline:3px solid #f0a52a;outline-offset:2px}
+
+.side{display:flex;flex-direction:column;gap:14px;min-width:0}
+.box{background:var(--panel);border:2px solid var(--line);border-radius:var(--r);padding:14px}
+.box h2{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.tally{display:grid;gap:8px}
+.trow{display:grid;grid-template-columns:34px 1fr auto;align-items:center;gap:10px;padding:6px 8px;border-radius:10px;transition:background .3s}
+.trow.flash{background:#fff3c4}
+.trow .ico{width:34px;height:34px}
+.trow .lbl{font-weight:700;font-size:18px}
+.trow .det{display:block;font-weight:500;font-size:13px;color:var(--muted)}
+.trow .val{font-size:32px;font-weight:800;font-variant-numeric:tabular-nums;min-width:1.4em;text-align:right}
+.trow .val.empty{color:#b9c4d4}
+.legend{display:grid;gap:8px;font-size:14px;color:var(--muted)}
+.legend b{color:var(--ink)}
+.dots{display:flex;flex-wrap:wrap;gap:6px}
+.dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);background:var(--panel);font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;padding:0;display:grid;place-items:center}
+.dot.q{border-radius:7px}
+.dot.seen{background:#e8effb;border-color:#a9bfe6;color:#16397a}
+.dot.cur{background:var(--accent);border-color:var(--accent);color:#fff}
+.dot:disabled{cursor:not-allowed;opacity:.55}
+.dots-note{margin:8px 0 0;font-size:12.5px;color:var(--muted)}
+
+/* Overlays in der Bühne */
+.ov{position:absolute;inset:0;display:grid;place-items:center;padding:16px;background:#f5f7fbcc;cursor:default}
+.ovcard{background:var(--panel);border:2px solid var(--line);border-radius:18px;padding:22px 24px;max-width:520px;width:100%;box-shadow:0 12px 40px #1b263622;display:flex;flex-direction:column;gap:14px}
+.ovcard h2{margin:0;font-size:clamp(22px,2.6vw,30px);text-wrap:balance}
+.ovcard p{margin:0;color:var(--muted);font-size:17px}
+.ovcard .row{display:flex;flex-wrap:wrap;gap:10px}
+.steck{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;align-items:baseline;font-size:18px}
+.steck dt{font-weight:700}
+.steck dd{margin:0}
+.steck dd b{font-size:22px;font-variant-numeric:tabular-nums}
+
+.stagebox{position:relative}
+.qpanel{position:absolute;left:12px;right:12px;bottom:12px;background:var(--panel);border:2px solid var(--accent);border-radius:16px;padding:14px 16px;box-shadow:0 10px 30px #1b263626;display:flex;flex-direction:column;gap:10px;cursor:default;max-height:calc(100% - 24px);overflow:auto}
+@media (max-width:560px){.qpanel{position:static;margin-top:10px;max-height:none;box-shadow:none}}
+.qhead{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--accent)}
+.qtext{margin:0;font-size:clamp(18px,2.1vw,23px);font-weight:700;line-height:1.3;text-wrap:balance}
+.opts{display:flex;flex-wrap:wrap;gap:8px}
+.opt{min-height:52px;min-width:64px;padding:6px 16px;border-radius:12px;border:2px solid var(--line);background:#f8fafd;font-size:20px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.opt.small{font-size:17px;font-weight:700}
+.opt:hover:not(:disabled){border-color:var(--accent);background:#eef3fc}
+.opt.wrong{border-color:var(--warn);background:var(--warn-bg);color:var(--warn);text-decoration:line-through}
+.opt.right{border-color:var(--ok);background:var(--ok-bg);color:var(--ok)}
+.opt:disabled{cursor:default}
+.sw{width:22px;height:22px;border-radius:6px;border:2px solid #1b263633;flex:none}
+.fb{margin:0;padding:8px 12px;border-radius:10px;font-size:17px;font-weight:600}
+.fb.ok{background:var(--ok-bg);color:var(--ok)}
+.fb.hint{background:var(--hint-bg);color:#6b4b00}
+.fb.sol{background:#eef3fc;color:#16397a}
+
+.foot{font-size:13px;color:var(--muted);text-align:center}
+@media (prefers-reduced-motion:reduce){.pick,.trow{transition:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Körper-<span>Werkstatt</span></h1>
+    <p>Geometrische Körper falten, drehen und zählen</p>
+  </header>
+
+  <nav class="picker" id="picker" aria-label="Körper auswählen"></nav>
+
+  <main class="layout">
+    <section class="stagewrap">
+      <div class="stagebox">
+      <div class="stage" id="stage">
+        <canvas id="cv" aria-label="Animation des Körpers"></canvas>
+        <div class="groupline" id="groupline" hidden></div>
+        <div class="dragtip" id="dragtip">Mit dem Finger drehen</div>
+
+        <div class="ov" id="startOv">
+          <div class="ovcard">
+            <h2 id="startTitle">Würfel</h2>
+            <p id="startText"></p>
+            <div class="row">
+              <button class="btn primary" id="startBtn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>Start</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="ov" id="sumOv" hidden>
+          <div class="ovcard">
+            <h2 id="sumTitle">Steckbrief</h2>
+            <dl class="steck" id="sumList"></dl>
+            <p id="sumNote"></p>
+            <div class="row">
+              <button class="btn primary" id="sumNext"></button>
+              <button class="btn" id="sumAgain">Nochmal ansehen</button>
+            </div>
+          </div>
+        </div>
+      </div>
+        <div class="qpanel" id="qpanel" hidden role="dialog" aria-labelledby="qtext">
+          <div class="qhead"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.2 9.2a3 3 0 0 1 5.6 1.3c0 2-2.8 2.5-2.8 4"/><circle cx="12" cy="18" r=".6" fill="currentColor"/></svg>Aufgabe</div>
+          <p class="qtext" id="qtext"></p>
+          <div class="opts" id="opts"></div>
+          <p class="fb" id="fb" hidden></p>
+          <div class="row"><button class="btn primary" id="qnext" hidden>Weiter
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button></div>
+        </div>
+
+      </div>
+
+      <p class="caption" id="caption" aria-live="polite"></p>
+
+      <div class="controls">
+        <button class="btn" id="bBack" aria-label="Schritt zurück"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>Zurück</button>
+        <button class="btn primary" id="bPlay"><svg id="icoPlay" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg><span id="playLbl">Abspielen</span></button>
+        <button class="btn" id="bNext" aria-label="Nächster Schritt">Weiter<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+        <span class="spacer"></span>
+        <div class="seg" role="group" aria-label="Tempo">
+          <button id="tSlow" aria-pressed="false">Langsam</button>
+          <button id="tNorm" aria-pressed="true">Normal</button>
+        </div>
+        <button class="btn" id="bSpeak" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18.3 6.5a8 8 0 0 1 0 11"/></svg>Vorlesen</button>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="box">
+        <h2 id="tallyTitle">Zählbrett</h2>
+        <div class="tally">
+          <div class="trow" id="rowF">
+            <svg class="ico" viewBox="0 0 34 34"><path d="M6 11 L20 6 L28 12 L14 17 Z" fill="#2a5fc4" fill-opacity=".35" stroke="#2a5fc4" stroke-width="2"/><path d="M6 11 V24 L14 30 V17 Z" fill="none" stroke="#9aa9bf" stroke-width="1.5"/><path d="M14 17 V30 L28 25 V12" fill="none" stroke="#9aa9bf" stroke-width="1.5"/></svg>
+            <span class="lbl">Flächen<span class="det" id="detF"></span></span><span class="val empty" id="valF">?</span>
+          </div>
+          <div class="trow" id="rowK">
+            <svg class="ico" viewBox="0 0 34 34"><path d="M6 11 L20 6 L28 12 L14 17 Z M6 11 V24 L14 30 V17 M14 30 L28 25 V12" fill="none" stroke="#9aa9bf" stroke-width="1.5"/><path d="M14 17 V30" stroke="#d9670a" stroke-width="4" stroke-linecap="round"/></svg>
+            <span class="lbl">Kanten<span class="det" id="detK"></span></span><span class="val empty" id="valK">?</span>
+          </div>
+          <div class="trow" id="rowE">
+            <svg class="ico" viewBox="0 0 34 34"><path d="M6 11 L20 6 L28 12 L14 17 Z M6 11 V24 L14 30 V17 M14 30 L28 25 V12" fill="none" stroke="#9aa9bf" stroke-width="1.5"/><circle cx="14" cy="17" r="4" fill="#c9245a"/></svg>
+            <span class="lbl">Ecken<span class="det" id="detE"></span></span><span class="val empty" id="valE">?</span>
+          </div>
+        </div>
+      </div>
+      <div class="box legend">
+        <h2>Merkwörter</h2>
+        <div><b>Fläche:</b> eben (flach) oder gewölbt (rund)</div>
+        <div><b>Kante:</b> Linie, an der zwei Flächen zusammenstoßen</div>
+        <div><b>Ecke:</b> spitzer Punkt am Körper</div>
+      </div>
+      <div class="box">
+        <h2>Schritte</h2>
+        <div class="dots" id="dots"></div>
+        <p class="dots-note">Eckige Felder sind Aufgaben.</p>
+      </div>
+    </aside>
+  </main>
+  <footer class="foot">Diese Seite speichert nichts und sendet keine Daten. Das Vorlesen nutzt die Sprachausgabe deines Geräts.</footer>
+</div>
+
+<script>
+"use strict";
+/* ============================ Mathe ============================ */
+const PI=Math.PI;
+const add=(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]];
+const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+const mul=(a,s)=>[a[0]*s,a[1]*s,a[2]*s];
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const vlen=a=>Math.hypot(a[0],a[1],a[2]);
+const norm=a=>{const l=vlen(a)||1;return [a[0]/l,a[1]/l,a[2]/l]};
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+function rotM(ax,an){const [x,y,z]=norm(ax),c=Math.cos(an),s=Math.sin(an),C=1-c;
+  return [[c+x*x*C,x*y*C-z*s,x*z*C+y*s],[y*x*C+z*s,c+y*y*C,y*z*C-x*s],[z*x*C-y*s,z*y*C+x*s,c+z*z*C]];}
+const mv=(M,v)=>[M[0][0]*v[0]+M[0][1]*v[1]+M[0][2]*v[2],M[1][0]*v[0]+M[1][1]*v[1]+M[1][2]*v[2],M[2][0]*v[0]+M[2][1]*v[1]+M[2][2]*v[2]];
+function mm(A,B){const C=[[0,0,0],[0,0,0],[0,0,0]];for(let i=0;i<3;i++)for(let j=0;j<3;j++)for(let k=0;k<3;k++)C[i][j]+=A[i][k]*B[k][j];return C}
+const ID={R:[[1,0,0],[0,1,0],[0,0,1]],t:[0,0,0]};
+const ap=(A,p)=>add(mv(A.R,p),A.t);
+const comp=(A,B)=>({R:mm(A.R,B.R),t:add(mv(A.R,B.t),A.t)});
+function rotAbout(p,ax,an){const R=rotM(ax,an);return {R,t:sub(p,mv(R,p))}}
+const centroid=pts=>mul(pts.reduce(add,[0,0,0]),1/pts.length);
+const near=(a,b)=>vlen(sub(a,b))<1e-6;
+const hex=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+
+/* ======================= Modelle: Vielflächner ======================= */
+function PolyModel(o){
+  const F=o.faces.map(f=>({...f,P:f.pts.map(p=>[p[0],p[1],0]),rgb:hex(f.color)}));
+  F.forEach(f=>{
+    if(f.parent<0)return;
+    const par=F[f.parent];let found=null;
+    for(let e=0;e<f.P.length&&!found;e++){const a=f.P[e],b=f.P[(e+1)%f.P.length];
+      for(let g=0;g<par.P.length;g++){const c=par.P[g],d=par.P[(g+1)%par.P.length];
+        if((near(a,c)&&near(b,d))||(near(a,d)&&near(b,c))){found={e,a,b};break}}}
+    if(!found)throw new Error("Scharnier fehlt: "+f.name);
+    let d=norm(sub(found.b,found.a));const v=sub(centroid(f.P),found.a);
+    if(cross(d,v)[2]<0)d=mul(d,-1);
+    f.hinge={p:found.a,axis:d,edge:found.e};
+  });
+  const transforms=t=>{const T=[];F.forEach((f,i)=>{T[i]=f.parent<0?ID:comp(T[f.parent],rotAbout(f.hinge.p,f.hinge.axis,f.angle*t))});return T};
+  // Analyse im gefalteten Zustand
+  const T1=transforms(1),W1=F.map((f,i)=>f.P.map(p=>ap(T1[i],p)));
+  const all=W1.flat();
+  const bb={min:[0,1,2].map(k=>Math.min(...all.map(p=>p[k]))),max:[0,1,2].map(k=>Math.max(...all.map(p=>p[k])))};
+  const bodyC=[0,1,2].map(k=>(bb.min[k]+bb.max[k])/2);
+  F.forEach((f,i)=>{const nl=norm(cross(sub(f.P[1],f.P[0]),sub(f.P[2],f.P[0])));
+    const nw=mv(T1[i].R,nl);f.nLocal=dot(nw,sub(centroid(W1[i]),bodyC))>=0?nl:mul(nl,-1)});
+  const key=p=>p.map(x=>{const r=Math.round(x*1000)/1000;return r===0?0:r}).join(",");
+  const emap=new Map(),vmap=new Map();
+  F.forEach((f,i)=>{const n=f.P.length;
+    for(let e=0;e<n;e++){const ka=key(W1[i][e]),kb=key(W1[i][(e+1)%n]);const k=ka<kb?ka+"|"+kb:kb+"|"+ka;
+      if(!emap.has(k))emap.set(k,{refs:[]});emap.get(k).refs.push({f:i,e})}
+    for(let v=0;v<n;v++){const k=key(W1[i][v]);if(!vmap.has(k))vmap.set(k,{refs:[],pos:W1[i][v]});vmap.get(k).refs.push({f:i,v})}
+  });
+  const edges=[...emap.values()],verts=[...vmap.values()];
+  // Klebekanten (im Netz getrennt, im Körper eine Kante)
+  const pairCols=["#d7263d","#0f9d8a","#2d7be0","#f28c28","#8e44ad","#b59a00","#e0479e","#5a8f29"];
+  const pairs=[];
+  edges.forEach(E=>{if(E.refs.length!==2)return;const [r1,r2]=E.refs;const f1=F[r1.f],f2=F[r2.f];
+    const hinge=(f2.parent===r1.f&&f2.hinge.edge===r2.e)||(f1.parent===r2.f&&f1.hinge.edge===r1.e);
+    if(!hinge)pairs.push({refs:E.refs,color:pairCols[pairs.length%pairCols.length]})});
+  // Zählreihenfolge
+  const stats={bb,tol:1e-3};
+  const ang=p=>Math.atan2(p[1]-bodyC[1],p[0]-bodyC[0]);
+  const edgeMid=E=>{const r=E.refs[0],n=F[r.f].P.length;return mul(add(W1[r.f][r.e],W1[r.f][(r.e+1)%n]),.5)};
+  const mk=(list,type,posOf)=>list.map((it,idx)=>({...it,g:o.classify(type,it,stats,W1,F),a:ang(posOf(it)),idx}))
+    .sort((x,y)=>x.g-y.g||x.a-y.a);
+  const items={
+    faces:mk(F.map((f,i)=>({fid:i,faces:[i]})),"faces",it=>centroid(W1[it.fid])),
+    edges:mk(edges.map(E=>({ref:E.refs[0],faces:E.refs.map(r=>r.f),W:E.refs.map(r=>[W1[r.f][r.e],W1[r.f][(r.e+1)%F[r.f].P.length]])[0]})),"edges",it=>mul(add(it.W[0],it.W[1]),.5)),
+    vertices:mk(verts.map(V=>({ref:V.refs[0],faces:V.refs.map(r=>r.f),pos:V.pos})),"vertices",it=>it.pos)
+  };
+  // Falsches Netz: Überlappung und Lücke
+  let overlap=null;
+  if(o.wrong){
+    const cs=W1.map(centroid),dup=new Set();
+    for(let i=0;i<cs.length;i++)for(let j=i+1;j<cs.length;j++)if(vlen(sub(cs[i],cs[j]))<1e-3){dup.add(i);dup.add(j)}
+    const s=o.side,c=add(cs[0],[0,0,s/2]);let ghost=null;
+    [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]].forEach(n=>{const fc=add(c,mul(n,s/2));
+      if(!cs.some(x=>vlen(sub(x,fc))<1e-3)){const u=n[0]?[0,1,0]:[1,0,0],w=cross(n,u),h=s/2;
+        ghost=[add(fc,add(mul(u,h),mul(w,h))),add(fc,add(mul(u,-h),mul(w,h))),add(fc,add(mul(u,-h),mul(w,-h))),add(fc,add(mul(u,h),mul(w,-h)))]}});
+    overlap={faces:[...dup],ghost};
+  }
+  const M={kind:"poly",F,items,pairs,overlap,groups:o.groups,T:null,W:null,
+    frame(vis){this.T=transforms(vis.fold);this.W=F.map((f,i)=>f.P.map(p=>ap(this.T[i],p)))},
+    closed(vis){return !o.wrong&&vis.fold>0.999},
+    polys(){return F.map((f,i)=>({pts:this.W[i],rgb:f.rgb,kinds:f.P.map(()=>"edge"),fid:i,n:mv(this.T[i].R,f.nLocal)}))},
+    geom(type,it){
+      if(type==="faces")return {polys:[this.W[it.fid]],faces:it.faces};
+      if(type==="edges"){const n=F[it.ref.f].P.length;return {line:[this.W[it.ref.f][it.ref.e],this.W[it.ref.f][(it.ref.e+1)%n]],faces:it.faces}}
+      return {point:this.W[it.ref.f][it.ref.v],faces:it.faces};
+    },
+    pairSeg(r){const n=F[r.f].P.length;return [this.W[r.f][r.e],this.W[r.f][(r.e+1)%n]]}
+  };
+  return M;
+}
+const Rct=(x0,y0,x1,y1)=>[[x0,y0],[x1,y0],[x1,y1],[x0,y1]];
+function boxFaces(a,b,c,cols){const hx=a/2,hy=b/2,q=PI/2;
+  return [
+    {name:"Boden",pts:Rct(-hx,-hy,hx,hy),parent:-1,angle:0,color:cols[0]},
+    {name:"Vorne",pts:Rct(-hx,-hy-c,hx,-hy),parent:0,angle:q,color:cols[1]},
+    {name:"Rechts",pts:Rct(hx,-hy,hx+c,hy),parent:0,angle:q,color:cols[4]},
+    {name:"Hinten",pts:Rct(-hx,hy,hx,hy+c),parent:0,angle:q,color:cols[2]},
+    {name:"Links",pts:Rct(-hx-c,-hy,-hx,hy),parent:0,angle:q,color:cols[3]},
+    {name:"Deckel",pts:Rct(-hx,hy+c,hx,hy+c+b),parent:3,angle:q,color:cols[5]}];
+}
+const zLevel=(type,it,st)=>{const t=st.tol,zmax=st.bb.max[2];
+  if(type==="faces")return 0;
+  const zs=type==="edges"?[it.W[0][2],it.W[1][2]]:[it.pos[2]];
+  if(zs.every(z=>Math.abs(z)<t))return 0;
+  if(zs.every(z=>Math.abs(z-zmax)<t))return 1;return 2};
+const boxClassify=(type,it,st,W1,F)=>{if(type==="faces"){const n=F[it.fid].name;return n==="Boden"?0:n==="Deckel"?1:2}return zLevel(type,it,st)};
+const BOX_GROUPS={faces:["unten","oben","rundherum"],edges:["unten","oben","senkrecht"],vertices:["unten","oben"]};
+
+function gridCubeFaces(cells,root,s,cols){
+  const idx=new Map(cells.map((c,i)=>[c.join(","),i]));const parent=Array(cells.length).fill(-2);parent[root]=-1;
+  const order=[root],q=[root];
+  while(q.length){const i=q.shift();const [x,y]=cells[i];
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){const j=idx.get((x+dx)+","+(y+dy));if(j!==undefined&&parent[j]===-2){parent[j]=i;order.push(j);q.push(j)}}}
+  const pos=new Map(order.map((c,k)=>[c,k]));
+  return order.map((ci,k)=>{const [x,y]=cells[ci];return {name:"F"+k,pts:Rct(x*s,y*s,(x+1)*s,(y+1)*s),parent:parent[ci]<0?-1:pos.get(parent[ci]),angle:PI/2,color:cols[k%cols.length]}});
+}
+
+/* ======================= Modelle: runde Körper ======================= */
+function CylModel(){
+  const r=1,h=2.5,L=2*PI*r,N=48;
+  const cM=hex("#f7c889"),cD=hex("#9fc4f3");
+  const M={kind:"round",
+    items:{faces:[{fid:"top",g:0},{fid:"bottom",g:0},{fid:"mantle",g:1}],edges:[{id:"rimTop",g:0},{id:"rimBottom",g:1}],vertices:[]},
+    groups:{faces:["eben","gewölbt"],edges:["oben","unten"],vertices:[]},
+    frame(vis){
+      const t=vis.fold,u=vis.stand,G=rotAbout([0,0,r],[1,0,0],PI/2*u);
+      const sheet=(s,y)=>{if(t<1e-4)return [s,y,0];const R=L/(2*PI*t),ph=s/R;return [R*Math.sin(ph),y,R*(1-Math.cos(ph))]};
+      const P=[],sa=clamp(1-t,0,1)*1;const rimT=[],rimB=[];
+      for(let i=0;i<N;i++){const s0=-L/2+i*L/N,s1=s0+L/N;
+        const p=[sheet(s0,-h/2),sheet(s1,-h/2),sheet(s1,h/2),sheet(s0,h/2)].map(x=>ap(G,x));
+        P.push({pts:p,rgb:cM,fid:"mantle",kinds:["edge",i===N-1?"seam":"none","edge",i===0?"seam":"none"],seamA:sa});
+        rimB.push(p[0]);rimT.push(p[3]);if(i===N-1){rimB.push(p[1]);rimT.push(p[2])}}
+      const disc=(cy,hy,sgn,fid)=>{const T=comp(G,rotAbout([0,hy,0],[1,0,0],sgn*PI/2*t));const pts=[];
+        for(let k=0;k<N;k++){const a=2*PI*k/N;pts.push(ap(T,[r*Math.cos(a),cy+r*Math.sin(a),0]))}
+        P.push({pts,rgb:cD,fid,kinds:pts.map(()=>"edge"),center:ap(T,[0,cy,0])})};
+      disc(h/2+r,h/2,1,"top");disc(-h/2-r,-h/2,-1,"bottom");
+      this.P=P;this.rim={rimTop:rimT,rimBottom:rimB};
+    },
+    closed(vis){return vis.fold>0.999},
+    polys(){return this.P},
+    geom(type,it){if(type==="faces")return {polys:this.P.filter(p=>p.fid===it.fid).map(p=>p.pts),faces:[it.fid]};
+      if(type==="edges")return {line:this.rim[it.id]};return null}
+  };return M;
+}
+function ConeModel(){
+  const r=1.05,s=2.9,al=2*PI*r/s,kF=s/r,bF=Math.asin(r/s),N=48;
+  const cM=hex("#a4dcb0"),cD=hex("#9fc4f3");
+  const M={kind:"round",
+    items:{faces:[{fid:"base",g:0},{fid:"mantle",g:1}],edges:[{id:"rim",g:0}],vertices:[{id:"apex",g:0}]},
+    groups:{faces:["eben","gewölbt"],edges:["unten am Rand"],vertices:["oben"]},
+    frame(vis){
+      const t=vis.fold,u=vis.stand,k=1+t*(kF-1),b=Math.asin(clamp(1/k,-1,1));
+      const G=rotAbout([0,0,0],[1,0,0],-(PI/2+bF)*u);
+      const a=[0,Math.cos(b),Math.sin(b)],e1=[0,Math.sin(b),-Math.cos(b)],e2=[1,0,0];
+      const Pt=(rho,psi)=>{const f=psi*k;return mul(add(mul(add(mul(e1,Math.cos(f)),mul(e2,Math.sin(f))),Math.sin(b)),mul(a,Math.cos(b))),rho)};
+      const P=[],apex=ap(G,[0,0,0]),rim=[];const sa=clamp(1-t,0,1);
+      for(let i=0;i<N;i++){const p0=-al/2+i*al/N,p1=p0+al/N;const A=ap(G,Pt(s,p0)),B=ap(G,Pt(s,p1));
+        P.push({pts:[apex,A,B],rgb:cM,fid:"mantle",kinds:[i===0?"seam":"none","edge",i===N-1?"seam":"none"],seamA:sa});
+        rim.push(A);if(i===N-1)rim.push(B)}
+      const T=comp(G,rotAbout([0,s,0],[1,0,0],t*(PI/2+bF)));const pts=[];
+      for(let q=0;q<N;q++){const an=2*PI*q/N;pts.push(ap(T,[r*Math.cos(an),s+r+r*Math.sin(an),0]))}
+      P.push({pts,rgb:cD,fid:"base",kinds:pts.map(()=>"edge")});
+      this.P=P;this.rim=rim;this.apex=apex;
+    },
+    closed(vis){return vis.fold>0.999},
+    polys(){return this.P},
+    geom(type,it){if(type==="faces")return {polys:this.P.filter(p=>p.fid===it.fid).map(p=>p.pts),faces:[it.fid]};
+      if(type==="edges")return {line:this.rim};return {point:this.apex}}
+  };return M;
+}
+function SphereModel(){
+  const R=1.4,NL=16,NO=32,GO=8,per=NO/GO,col=hex("#c9b0f0");
+  const M={kind:"round",
+    items:{faces:[{fid:"surface",g:0}],edges:[],vertices:[]},
+    groups:{faces:["gewölbt"],edges:[],vertices:[]},
+    frame(vis){const p=vis.peel,P=[];const S=[0,0,-R];
+      const pt=(la,lo)=>[R*Math.cos(la)*Math.cos(lo),R*Math.cos(la)*Math.sin(lo),R*Math.sin(la)];
+      for(let g=0;g<GO;g++){const lm=(g+.5)*2*PI/GO;const T=rotAbout(S,[-Math.sin(lm),Math.cos(lm),0],p*1.7);
+        for(let j=0;j<per;j++){const o=g*per+j,l0=o*2*PI/NO,l1=l0+2*PI/NO;
+          for(let i=0;i<NL;i++){const a0=-PI/2+i*PI/NL,a1=a0+PI/NL;
+            const pts=[pt(a0,l0),pt(a0,l1),pt(a1,l1),pt(a1,l0)].map(x=>ap(T,x));
+            P.push({pts,rgb:col,fid:"surface",kinds:["none",j===per-1?"seam":"none","none",j===0?"seam":"none"],seamA:clamp(p*6,0,1)})}}}
+      this.P=P},
+    closed(vis){return vis.peel<1e-3},
+    polys(){return this.P},
+    geom(type,it){return {polys:this.P.map(p=>p.pts)}}
+  };return M;
+}
+
+/* ============================ Kapitel ============================ */
+const CUBE_COLS=["#9fc4f3","#f6d86b","#a3dbac","#f29c9c","#c9aaf0","#f6bd7e"];
+const CUBE_NAMES=["blau","gelb","grün","rot","lila","orange"];
+const IN={fold:0,stand:0,peel:0,yaw:0,el:78,pairs:0,overlap:0};
+const FOLDED={yaw:32,el:24};
+const q=(text,opts,correct,hint,explain,extra)=>({q:{text,opts,correct,hint,explain,...(extra||{})}});
+
+const CH=[
+ {id:"wuerfel",name:"Würfel",short:"Würfel",
+  intro:"Wir falten ein Würfelnetz und zählen Flächen, Kanten und Ecken. Danach wartet ein Rätsel.",
+  models:{main:()=>PolyModel({faces:boxFaces(2,2,2,CUBE_COLS),classify:boxClassify,groups:BOX_GROUPS}),
+          wrong:()=>PolyModel({faces:gridCubeFaces([[0,0],[1,0],[2,0],[3,0],[0,1],[0,2]],1,2,["#9fc4f3","#f6d86b","#a3dbac","#f29c9c","#c9aaf0","#f6bd7e"]),classify:()=>0,groups:BOX_GROUPS,wrong:true,side:2})},
+  sum:{F:["6","alle eben, Quadrate"],K:["12","gerade"],E:["8",""],net:"Es gibt 11 verschiedene Würfelnetze."},
+  steps:[
+   {text:"Das ist ein Netz. Es besteht aus 6 Quadraten. Wir falten es jetzt zu einem Körper."},
+   {text:"Die Quadrate klappen hoch. Schau genau hin!",to:{fold:1,...FOLDED},dur:5},
+   {text:"Fertig! Aus dem Netz ist ein Würfel geworden.",to:{yaw:392},dur:7},
+   q("Wie viele Flächen hat der Würfel?",["4","6","8","12"],1,"Denk an das Netz. Wie viele Quadrate hatte es?","Jedes Quadrat aus dem Netz wird zu einer Fläche."),
+   {text:"Wir zählen die Flächen: unten, oben und rundherum.",count:"faces"},
+   {text:"Der Würfel hat 6 Flächen. Alle Flächen sind gleich große Quadrate."},
+   q("Eine Kante ist dort, wo zwei Flächen zusammenstoßen. Wie viele Kanten hat der Würfel?",["6","8","12","24"],2,"Zähle zuerst die Kanten unten, dann oben, dann die senkrechten.","Unten 4, oben 4 und 4 senkrechte Kanten. Das sind 12."),
+   {text:"Wir zählen: erst unten, dann oben, dann die senkrechten Kanten. Die gestrichelten Kanten hinten zählen auch mit!",count:"edges"},
+   {text:"Der Würfel hat 12 Kanten."},
+   q("An einer Ecke treffen sich Kanten. Wie viele Ecken hat der Würfel?",["4","6","8","12"],2,"Unten sind es 4 Ecken. Und oben?","Unten 4 und oben 4. Das sind 8 Ecken."),
+   {text:"Wir zählen die Ecken: erst unten, dann oben.",count:"vertices"},
+   {text:"Der Würfel hat 8 Ecken."},
+   {text:"Jetzt klappen wir den Würfel wieder auf. Achte auf die farbigen Linien im Netz.",to:{fold:0,yaw:0,el:78,pairs:1},dur:4},
+   q("Welche Fläche liegt im Würfel genau gegenüber der roten Fläche? Stell dir das Falten vor.",
+     [{label:"gelb",sw:CUBE_COLS[1]},{label:"grün",sw:CUBE_COLS[2]},{label:"lila",sw:CUBE_COLS[4]},{label:"orange",sw:CUBE_COLS[5]}],2,
+     "Die rote und die lila Fläche liegen beide neben der blauen Fläche. Wohin klappen sie?","Rot und lila klappen beide hoch und stehen sich gegenüber.",{small:true}),
+   {text:"Wir falten langsam. Immer zwei Linien mit gleicher Farbe treffen sich. Zusammen werden sie zu einer Kante.",to:{fold:1,yaw:-30,el:26},dur:9},
+   {text:"Siehst du? Die rote und die lila Fläche liegen sich gegenüber.",to:{yaw:-80},dur:5},
+   {text:"Achtung, Rätsel! Hier ist ein anderes Netz.",to:{model:"wrong",fold:0,pairs:0,yaw:0,el:78},dur:2.5},
+   q("Kann man aus diesem Netz einen Würfel falten?",["Ja","Nein"],1,"Stell dir vor, wohin die zwei Quadrate ganz links oben klappen.","Zwei Quadrate landen am gleichen Platz. Dafür bleibt eine Seite offen."),
+   {text:"Wir probieren es aus.",to:{fold:1,yaw:28,el:24,overlap:1},dur:6},
+   {text:"Zwei Flächen liegen übereinander (blinkt rot). Eine Seite bleibt offen (gestrichelt). Das ist kein Würfelnetz!",to:{yaw:-22},dur:6},
+   {summary:true,text:"Das ist der Steckbrief vom Würfel."}
+  ]},
+ {id:"quader",name:"Quader",short:"Quader",
+  intro:"Ein Quader sieht aus wie eine Schachtel. Wir falten sein Netz und vergleichen ihn mit dem Würfel.",
+  models:{main:()=>PolyModel({faces:boxFaces(3.2,2,1.4,["#9fc4f3","#f6d86b","#f6d86b","#a3dbac","#a3dbac","#9fc4f3"]),classify:boxClassify,groups:BOX_GROUPS})},
+  sum:{F:["6","alle eben, Rechtecke"],K:["12","gerade"],E:["8",""],net:"Gegenüberliegende Flächen sind gleich groß."},
+  steps:[
+   {text:"Das ist das Netz eines Quaders. Es besteht aus Rechtecken. Gleiche Farben bedeuten gleich große Rechtecke."},
+   {text:"Wir falten.",to:{fold:1,...FOLDED},dur:5},
+   {text:"Ein Quader. Er sieht aus wie eine Schachtel.",to:{yaw:392},dur:7},
+   q("Was ist beim Quader anders als beim Würfel?",["Er hat weniger Ecken.","Nicht alle Flächen sind Quadrate.","Er hat keine Kanten."],1,"Schau dir die Form der Flächen an.","Beim Quader sind die Flächen Rechtecke. Beim Würfel sind alle Flächen Quadrate.",{small:true}),
+   q("Wie viele Flächen hat der Quader?",["4","5","6","8"],2,"Zähle die Rechtecke im Netz.","Das Netz hat 6 Rechtecke. Also hat der Quader 6 Flächen."),
+   {text:"Wir zählen die Flächen: unten, oben und rundherum.",count:"faces"},
+   {text:"Der Quader hat 6 Flächen. Gegenüberliegende Flächen sind gleich groß."},
+   q("Wie viele Kanten hat der Quader?",["8","10","12","14"],2,"Zähle unten, oben und die senkrechten Kanten.","Unten 4, oben 4, senkrecht 4. Das sind 12 Kanten, genau wie beim Würfel."),
+   {text:"Wir zählen die Kanten: unten, oben, senkrecht.",count:"edges"},
+   {text:"Der Quader hat 12 Kanten, genau wie der Würfel."},
+   q("Wie viele Ecken hat der Quader?",["6","8","10","12"],1,"Unten 4 Ecken. Und oben?","Unten 4 und oben 4. Das sind 8 Ecken."),
+   {text:"Wir zählen die Ecken.",count:"vertices"},
+   {text:"Der Quader hat 8 Ecken. Kanten und Ecken hat er genauso viele wie der Würfel."},
+   {summary:true,text:"Das ist der Steckbrief vom Quader."}
+  ]},
+ {id:"prisma",name:"Dreiecksprisma",short:"Prisma",
+  intro:"Ein Prisma mit zwei Dreiecken. Es sieht aus wie ein Zelt.",
+  models:{main:()=>{const L=3.4,a=2,hx=L/2,hy=a/2,hh=a*Math.sqrt(3)/2;
+    return PolyModel({faces:[
+      {name:"R0",pts:Rct(-hx,-hy,hx,hy),parent:-1,angle:0,color:"#9fc4f3",kind:"R"},
+      {name:"R1",pts:Rct(-hx,-hy-a,hx,-hy),parent:0,angle:2*PI/3,color:"#a3dbac",kind:"R"},
+      {name:"R2",pts:Rct(-hx,hy,hx,hy+a),parent:0,angle:2*PI/3,color:"#f6bd7e",kind:"R"},
+      {name:"T1",pts:[[hx,-hy],[hx+hh,0],[hx,hy]],parent:0,angle:PI/2,color:"#f6d86b",kind:"T"},
+      {name:"T2",pts:[[-hx,hy],[-hx-hh,0],[-hx,-hy]],parent:0,angle:PI/2,color:"#f6d86b",kind:"T"}],
+     classify:(type,it,st,W1,F)=>{if(type==="faces")return F[it.fid].kind==="T"?0:1;const t=st.tol,xm=st.bb.min[0],xM=st.bb.max[0];
+       const xs=type==="edges"?[it.W[0][0],it.W[1][0]]:[it.pos[0]];
+       if(xs.every(x=>Math.abs(x-xm)<t))return 0;if(xs.every(x=>Math.abs(x-xM)<t))return 1;return 2},
+     groups:{faces:["Dreiecke","Rechtecke"],edges:["Dreieck links","Dreieck rechts","lange Kanten"],vertices:["links","rechts"]}})}},
+  sum:{F:["5","alle eben: 2 Dreiecke, 3 Rechtecke"],K:["9","gerade"],E:["6",""],net:"Die beiden Dreiecke liegen sich gegenüber."},
+  steps:[
+   {text:"Das ist das Netz eines Prismas. Es hat 3 Rechtecke und 2 Dreiecke."},
+   {text:"Wir falten.",to:{fold:1,...FOLDED},dur:5},
+   {text:"Das ist ein Dreiecksprisma. Es sieht aus wie ein Zelt oder ein Dach.",to:{yaw:392},dur:7},
+   q("Wie viele Flächen hat das Prisma?",["3","5","6","9"],1,"Zähle die Teile im Netz: Rechtecke und Dreiecke.","2 Dreiecke und 3 Rechtecke. Das sind 5 Flächen."),
+   {text:"Wir zählen die Flächen: erst die Dreiecke, dann die Rechtecke.",count:"faces"},
+   {text:"Das Prisma hat 5 Flächen: 2 Dreiecke und 3 Rechtecke."},
+   q("Wie viele Kanten hat das Prisma?",["6","8","9","12"],2,"Jedes Dreieck hat 3 Kanten. Dazu kommen die langen Kanten.","3 am linken Dreieck, 3 am rechten Dreieck und 3 lange Kanten. Das sind 9."),
+   {text:"Wir zählen die Kanten: am linken Dreieck, am rechten Dreieck und die langen Kanten.",count:"edges"},
+   {text:"Das Prisma hat 9 Kanten."},
+   q("Wie viele Ecken hat das Prisma?",["3","5","6","8"],2,"Zähle die Ecken an den beiden Dreiecken.","Jedes Dreieck hat 3 Ecken. 3 und 3 sind 6."),
+   {text:"Wir zählen die Ecken: links und rechts.",count:"vertices"},
+   {text:"Das Prisma hat 6 Ecken."},
+   {summary:true,text:"Das ist der Steckbrief vom Dreiecksprisma."}
+  ]},
+ {id:"pyramide",name:"Pyramide",short:"Pyramide",
+  intro:"Eine Pyramide mit einem Quadrat als Grundfläche. Die Dreiecke treffen sich an der Spitze.",
+  models:{main:()=>{const a=2.4,h2=a/2,s=2.35,hh=Math.sqrt(s*s-h2*h2),th=Math.atan2(hh,h2),A=PI-th;
+    const tc=["#f6d86b","#f6bd7e","#f6d86b","#f6bd7e"];
+    return PolyModel({faces:[
+      {name:"G",pts:Rct(-h2,-h2,h2,h2),parent:-1,angle:0,color:"#9fc4f3"},
+      {name:"D1",pts:[[-h2,-h2],[0,-h2-s],[h2,-h2]],parent:0,angle:A,color:tc[0]},
+      {name:"D2",pts:[[h2,-h2],[h2+s,0],[h2,h2]],parent:0,angle:A,color:tc[1]},
+      {name:"D3",pts:[[h2,h2],[0,h2+s],[-h2,h2]],parent:0,angle:A,color:tc[2]},
+      {name:"D4",pts:[[-h2,h2],[-h2-s,0],[-h2,-h2]],parent:0,angle:A,color:tc[3]}],
+     classify:(type,it,st,W1,F)=>{if(type==="faces")return F[it.fid].name==="G"?0:1;const t=st.tol;
+       const zs=type==="edges"?[it.W[0][2],it.W[1][2]]:[it.pos[2]];return zs.every(z=>Math.abs(z)<t)?0:1},
+     groups:{faces:["Grundfläche","Dreiecke"],edges:["unten","zur Spitze"],vertices:["unten","Spitze"]}})}},
+  sum:{F:["5","alle eben: 1 Quadrat, 4 Dreiecke"],K:["8","gerade"],E:["5","4 unten, 1 Spitze"],net:"Die Dreiecke treffen sich oben an der Spitze."},
+  steps:[
+   {text:"Das ist das Netz einer Pyramide: ein Quadrat in der Mitte und 4 Dreiecke."},
+   q("Was passiert mit den Spitzen der Dreiecke, wenn wir falten?",["Sie treffen sich oben in einem Punkt.","Sie bleiben flach liegen.","Sie zeigen nach unten."],0,"Die Dreiecke klappen alle nach oben.","Alle 4 Spitzen treffen sich oben. Dort ist die Spitze der Pyramide.",{small:true}),
+   {text:"Wir falten.",to:{fold:1,yaw:32,el:22},dur:5},
+   {text:"Die 4 Dreiecke treffen sich oben an der Spitze.",to:{yaw:392},dur:7},
+   q("Wie viele Flächen hat die Pyramide?",["4","5","6","8"],1,"Das Quadrat unten zählt auch mit.","1 Quadrat und 4 Dreiecke. Das sind 5 Flächen."),
+   {text:"Wir zählen die Flächen: erst die Grundfläche, dann die Dreiecke.",count:"faces"},
+   {text:"Die Pyramide hat 5 Flächen: 1 Quadrat und 4 Dreiecke."},
+   q("Wie viele Kanten hat die Pyramide?",["4","6","8","12"],2,"Unten am Quadrat sind 4 Kanten. Wie viele Kanten gehen zur Spitze?","4 Kanten unten und 4 Kanten zur Spitze. Das sind 8."),
+   {text:"Wir zählen die Kanten: erst unten, dann die Kanten zur Spitze.",count:"edges"},
+   {text:"Die Pyramide hat 8 Kanten."},
+   q("Wie viele Ecken hat die Pyramide?",["4","5","6","8"],1,"Vergiss die Spitze oben nicht!","4 Ecken unten und die Spitze oben. Das sind 5 Ecken."),
+   {text:"Wir zählen die Ecken: unten und die Spitze.",count:"vertices"},
+   {text:"Die Pyramide hat 5 Ecken. Auch die Spitze ist eine Ecke."},
+   {summary:true,text:"Das ist der Steckbrief von der Pyramide."}
+  ]},
+ {id:"zylinder",name:"Zylinder",short:"Zylinder",
+  intro:"Ein Zylinder sieht aus wie eine Dose. Er hat gewölbte und ebene Flächen.",
+  models:{main:CylModel},
+  sum:{F:["3","2 eben (Kreise), 1 gewölbt"],K:["2","rund"],E:["0",""],net:"Der Zylinder kann rollen, weil er keine Ecken hat."},
+  steps:[
+   {text:"Das ist das Netz eines Zylinders: ein Rechteck und 2 Kreise."},
+   q("Was passiert mit dem Rechteck beim Falten?",["Es wird rund gebogen.","Es bleibt flach.","Es wird ein Dreieck."],0,"Denk an eine Dose. Wie sieht ihre Seite aus?","Das Rechteck wird zu einem Rohr gebogen.",{small:true}),
+   {text:"Das Rechteck wird zu einem Rohr gerollt. Die Kreise klappen an die Enden.",to:{fold:1,yaw:25,el:30},dur:6.5},
+   {text:"Jetzt stellen wir den Zylinder auf. Er sieht aus wie eine Dose.",to:{stand:1,yaw:25,el:24},dur:3.5},
+   q("Wie viele Flächen hat der Zylinder?",["1","2","3","4"],2,"Oben ein Kreis, unten ein Kreis. Und die runde Fläche dazwischen?","2 ebene Kreise und 1 gewölbte Fläche. Das sind 3 Flächen."),
+   {text:"Wir zählen die Flächen: erst die ebenen, dann die gewölbte.",count:"faces"},
+   {text:"Der Zylinder hat 3 Flächen: 2 ebene Kreise und 1 gewölbte Fläche."},
+   q("Wie viele Kanten hat der Zylinder?",["0","1","2","4"],2,"Wo stoßen zwei Flächen zusammen? Schau oben und unten an den Rand.","Oben und unten stoßen Flächen zusammen. Das sind 2 Kanten."),
+   {text:"Wir zählen die Kanten: oben und unten.",count:"edges"},
+   {text:"Der Zylinder hat 2 Kanten. Sie sind rund."},
+   q("Wie viele Ecken hat der Zylinder?",["0","1","2","4"],0,"Suche einen spitzen Punkt. Findest du einen?","Ein Zylinder hat keine Ecken. Darum kann er rollen."),
+   {text:"Wir suchen Ecken.",count:"vertices"},
+   {text:"Der Zylinder hat keine Ecken. Darum kann er rollen."},
+   {summary:true,text:"Das ist der Steckbrief vom Zylinder."}
+  ]},
+ {id:"kegel",name:"Kegel",short:"Kegel",
+  intro:"Ein Kegel sieht aus wie ein Partyhut. Sein Netz hat eine besondere Form.",
+  models:{main:ConeModel},
+  sum:{F:["2","1 eben (Kreis), 1 gewölbt"],K:["1","rund"],E:["1","die Spitze"],net:"Das Netz besteht aus einem Kreis und einem Kreisstück."},
+  steps:[
+   {text:"Das ist das Netz eines Kegels: ein Kreis und ein Kreisstück. Das Kreisstück sieht aus wie ein Fächer."},
+   {text:"Der Fächer wird zu einer Tüte gerollt. Der Kreis wird zum Boden.",to:{fold:1,yaw:25,el:30},dur:6.5},
+   {text:"Wir stellen den Kegel auf. Er sieht aus wie ein Partyhut.",to:{stand:1,yaw:25,el:20},dur:3.5},
+   q("Wie viele Flächen hat der Kegel?",["1","2","3"],1,"Unten ist ein Kreis. Und rundherum?","1 ebener Kreis unten und 1 gewölbte Fläche. Das sind 2 Flächen."),
+   {text:"Wir zählen die Flächen: erst die ebene, dann die gewölbte.",count:"faces"},
+   {text:"Der Kegel hat 2 Flächen: einen ebenen Kreis und eine gewölbte Fläche."},
+   q("Wie viele Kanten hat der Kegel?",["0","1","2"],1,"Wo stoßen die beiden Flächen zusammen?","Unten am Rand stoßen die Flächen zusammen. Das ist 1 Kante."),
+   {text:"Wir zählen die Kanten.",count:"edges"},
+   {text:"Der Kegel hat 1 Kante. Sie ist rund."},
+   q("Wie viele Ecken hat der Kegel?",["0","1","2"],1,"Schau ganz nach oben.","Die Spitze oben ist eine Ecke."),
+   {text:"Wir zählen die Ecken.",count:"vertices"},
+   {text:"Der Kegel hat 1 Ecke: die Spitze."},
+   {summary:true,text:"Das ist der Steckbrief vom Kegel."}
+  ]},
+ {id:"kugel",name:"Kugel",short:"Kugel",
+  intro:"Eine Kugel ist rund wie ein Ball. Hat sie auch ein Netz?",
+  models:{main:SphereModel},
+  sum:{F:["1","gewölbt"],K:["0",""],E:["0",""],net:"Die Kugel hat kein Netz."},
+  init:{el:28,yaw:10},
+  steps:[
+   {text:"Das ist eine Kugel. Sie ist rund wie ein Ball.",to:{yaw:190},dur:6},
+   q("Wie viele Flächen hat die Kugel?",["0","1","2"],1,"Fahre in Gedanken mit dem Finger über die Kugel.","Die Kugel hat nur eine einzige Fläche. Sie ist ganz gewölbt."),
+   {text:"Wir zählen die Flächen.",count:"faces"},
+   {text:"Die Kugel hat 1 Fläche. Sie ist gewölbt."},
+   q("Wie viele Kanten hat die Kugel?",["0","1","2"],0,"Eine Kante ist dort, wo zwei Flächen zusammenstoßen.","Die Kugel hat nur eine Fläche. Darum gibt es keine Kanten."),
+   {text:"Wir suchen Kanten.",count:"edges"},
+   q("Wie viele Ecken hat die Kugel?",["0","1","2"],0,"Gibt es einen spitzen Punkt?","Die Kugel hat keine Ecken. Darum rollt sie in jede Richtung."),
+   {text:"Wir suchen Ecken.",count:"vertices"},
+   {text:"Die Kugel hat keine Kanten und keine Ecken. Darum rollt sie in jede Richtung."},
+   q("Kann man eine Kugel aufklappen wie einen Würfel, sodass alles flach liegt?",["Ja","Nein"],1,"Denk an eine Orangenschale.","Die Stücke bleiben immer gewölbt. Sie werden nie ganz flach."),
+   {text:"Wir schneiden die Kugel auf wie eine Orangenschale und klappen die Stücke auf.",to:{peel:1,yaw:230,el:40},dur:6},
+   {text:"Die Stücke bleiben gewölbt. Sie werden nie ganz flach. Darum hat die Kugel kein Netz.",to:{yaw:300},dur:6},
+   {summary:true,text:"Das ist der Steckbrief von der Kugel."}
+  ]}
+];
+
+/* ============================ Zeichnen ============================ */
+const INK="#1b2636",COL={faces:"#2a5fc4",edges:"#d9670a",vertices:"#c9245a"};
+function makeCam(){return {S:null,ox:0,oy:0}}
+function renderScene(ctx,w,h,model,vis,cam,o){
+  o=o||{};
+  model.frame(vis);
+  const polys=model.polys();
+  const all=polys.flatMap(p=>p.pts);
+  const mn=[0,1,2].map(k=>Math.min(...all.map(p=>p[k]))),mx=[0,1,2].map(k=>Math.max(...all.map(p=>p[k])));
+  const C=[0,1,2].map(k=>(mn[k]+mx[k])/2);
+  const yaw=(vis.yaw+(o.uYaw||0))*PI/180,el=clamp(vis.el+(o.uEl||0),-5,89)*PI/180;
+  const cy=Math.cos(yaw),sy=Math.sin(yaw),ce=Math.cos(el),se=Math.sin(el),dist=16;
+  const view=p=>{const q=sub(p,C);const x=q[0]*cy-q[1]*sy,y=q[0]*sy+q[1]*cy,z=q[2];return [x,y*se+z*ce,-y*ce+z*se]};
+  const viewN=n=>{const x=n[0]*cy-n[1]*sy,y=n[0]*sy+n[1]*cy,z=n[2];return [x,y*se+z*ce,-y*ce+z*se]};
+  const pr=v=>{const f=dist/(dist-v[2]);return [v[0]*f,v[1]*f]};
+  // Einpassen
+  let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+  for(const p of all){const s=pr(view(p));x0=Math.min(x0,s[0]);x1=Math.max(x1,s[0]);y0=Math.min(y0,s[1]);y1=Math.max(y1,s[1])}
+  const fitS=Math.min(w*(o.fitW||.78)/Math.max(x1-x0,1e-3),h*(o.fitH||.72)/Math.max(y1-y0,1e-3));
+  const tS=Math.min(fitS,o.maxS||fitS),tox=-(x0+x1)/2,toy=-(y0+y1)/2;
+  if(cam.S===null||o.snap){cam.S=tS;cam.ox=tox;cam.oy=toy}else{const k=.12;cam.S+=(tS-cam.S)*k;cam.ox+=(tox-cam.ox)*k;cam.oy+=(toy-cam.oy)*k}
+  const S=cam.S,off=o.offY||0;
+  const scr=p=>{const v=view(p),s=pr(v);return [w/2+(s[0]+cam.ox)*S,h/2+off-(s[1]+cam.oy)*S,v[2]]};
+  const closed=model.closed(vis);
+  const L=norm([-.35,.55,.75]);
+  const bodyV=view(C);
+  const items=polys.map(p=>{const V=p.pts.map(view);let n=p.n?viewN(p.n):norm(cross(sub(V[1],V[0]),sub(V[2],V[0])));
+    const cV=centroid(V);
+    if(!p.n&&closed&&dot(n,cV)<0)n=mul(n,-1); /* nach außen richten */
+    const toCam=[-cV[0],-cV[1],dist-cV[2]];const front=dot(n,toCam)>0;
+    return {p,V,S2:p.pts.map(scr),depth:cV[2],n,front}});
+  const byFid={};items.forEach(it=>{(byFid[it.p.fid]=byFid[it.p.fid]||[]).push(it)});
+  items.sort((a,b)=>closed?((a.front-b.front)||(a.depth-b.depth)):(a.depth-b.depth));
+  const alphaFront=1;const backSegs=[];
+  ctx.lineJoin="round";ctx.lineCap="round";
+  for(const it of items){
+    const {p,S2,n}=it;
+    const lam=Math.abs(dot(n,L));const sh=closed?(it.front?.84+.18*Math.max(0,dot(n,L)):.7):(.86+.16*lam);
+    const c=p.rgb.map(v=>Math.round(clamp(v*sh,0,255)));
+    ctx.beginPath();S2.forEach((s,i)=>i?ctx.lineTo(s[0],s[1]):ctx.moveTo(s[0],s[1]));ctx.closePath();
+    ctx.globalAlpha=closed&&it.front?alphaFront:1;
+    ctx.fillStyle=`rgb(${c[0]},${c[1]},${c[2]})`;ctx.fill();
+    if(p.kinds.includes("none")){ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=1;ctx.stroke()}
+    ctx.globalAlpha=1;
+    const back=closed&&!it.front;
+    for(let k=0;k<p.kinds.length;k++){const kind=p.kinds[k];if(kind==="none")continue;
+      let a=1;if(kind==="seam"){a=p.seamA;if(a<.02)continue}
+      const s0=S2[k],s1=S2[(k+1)%S2.length];
+      if(back){backSegs.push([s0,s1,a]);continue}
+      ctx.beginPath();ctx.moveTo(s0[0],s0[1]);ctx.lineTo(s1[0],s1[1]);
+      ctx.strokeStyle=INK;ctx.globalAlpha=back?.42*a:a;ctx.lineWidth=o.icon?1.2:(back?1.6:2.2);
+      ctx.setLineDash(back&&!o.icon?[6,6]:[]);ctx.stroke()}
+    ctx.setLineDash([]);ctx.globalAlpha=1;
+  }
+  if(!o.icon&&backSegs.length){ctx.setLineDash([7,6]);ctx.lineWidth=1.8;ctx.strokeStyle=INK;
+    for(const [a,b,al] of backSegs){ctx.globalAlpha=.5*al;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke()}
+    ctx.setLineDash([]);ctx.globalAlpha=1}
+  if(o.icon)return;
+  const isFront=faces=>!closed||faces.some(f=>(byFid[f]||[]).some(x=>x.front));
+  const pc=[w/2,h/2+off];
+  // Klebekanten
+  if(vis.pairs>0.01&&model.pairs){
+    ctx.lineWidth=6;ctx.globalAlpha=vis.pairs;
+    for(const pr_ of model.pairs)for(const r of pr_.refs){const [a,b]=model.pairSeg(r).map(scr);
+      ctx.strokeStyle=pr_.color;ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.stroke()}
+    ctx.globalAlpha=1;
+  }
+  // Falsches Netz
+  if(vis.overlap>0.01&&model.overlap){
+    const blink=.35+.25*Math.sin(o.time*6);const a=vis.overlap*clamp((vis.fold-.85)/.15,0,1);
+    if(a>0){
+      for(const fi of model.overlap.faces){const ps=model.W[fi].map(scr);ctx.beginPath();ps.forEach((s,i)=>i?ctx.lineTo(s[0],s[1]):ctx.moveTo(s[0],s[1]));ctx.closePath();
+        ctx.globalAlpha=a*blink;ctx.fillStyle="#e0322a";ctx.fill();ctx.globalAlpha=a;ctx.strokeStyle="#b3261e";ctx.lineWidth=3;ctx.stroke()}
+      if(model.overlap.ghost){const ps=model.overlap.ghost.map(scr);ctx.beginPath();ps.forEach((s,i)=>i?ctx.lineTo(s[0],s[1]):ctx.moveTo(s[0],s[1]));ctx.closePath();
+        ctx.globalAlpha=a;ctx.setLineDash([9,7]);ctx.strokeStyle="#b3261e";ctx.lineWidth=3;ctx.stroke();ctx.setLineDash([])}
+      ctx.globalAlpha=1}
+  }
+  // Zählen
+  const cnt=vis.count;
+  if(cnt&&cnt.list.length){
+    const type=cnt.type,col=COL[type],n=cnt.n;const labels=[];
+    for(let i=0;i<cnt.list.length&&i<Math.floor(n);i++){
+      const it=cnt.list[i],g=model.geom(type,it);const recent=i===Math.floor(n)-1&&n<cnt.list.length+.5;
+      const hidden=g.faces?!isFront(g.faces):false;
+      ctx.globalAlpha=hidden?.55:1;
+      if(type==="faces"){
+        let best=null;
+        for(const P of g.polys){const ps=P.map(scr);ctx.beginPath();ps.forEach((s,k)=>k?ctx.lineTo(s[0],s[1]):ctx.moveTo(s[0],s[1]));ctx.closePath();
+          ctx.fillStyle=col;ctx.globalAlpha=recent?(hidden?.22:.42):(hidden?0:.1);ctx.fill();if(recent&&!hidden&&g.polys.length===1){ctx.globalAlpha=1;ctx.strokeStyle=col;ctx.lineWidth=4;ctx.stroke()}
+          const cz=centroid(P.map(view));if(!best||cz[2]>best.z)best={z:cz[2],p:scr(centroid(P))}}
+        let at=best.p;if(g.polys.length===1)at=scr(centroid(g.polys[0]));
+        labels.push({at,num:i+1,hidden,recent});
+      }else if(type==="edges"){
+        const ps=g.line.map(scr);ctx.beginPath();ps.forEach((s,k)=>k?ctx.lineTo(s[0],s[1]):ctx.moveTo(s[0],s[1]));
+        ctx.strokeStyle=col;ctx.lineWidth=recent?8:6;ctx.setLineDash(hidden?[8,7]:[]);ctx.stroke();ctx.setLineDash([]);
+        let at;if(ps.length===2)at=[(ps[0][0]+ps[1][0])/2,(ps[0][1]+ps[1][1])/2];else{at=ps.reduce((b,s)=>s[2]>b[2]?s:b)}
+        labels.push({at,num:i+1,hidden,recent,push:18});
+      }else{
+        const s=scr(g.point);ctx.beginPath();ctx.arc(s[0],s[1],recent?9:7,0,2*PI);ctx.fillStyle=col;ctx.fill();
+        ctx.lineWidth=2;ctx.strokeStyle="#fff";ctx.stroke();labels.push({at:s,num:i+1,hidden,recent,push:22});
+      }
+      ctx.globalAlpha=1;
+    }
+    for(const lb of labels){let [x,y]=lb.at;if(lb.push){const d=[x-pc[0],y-pc[1]],l=Math.hypot(d[0],d[1])||1;x+=d[0]/l*lb.push;y+=d[1]/l*lb.push}
+      const r=lb.recent?16:13;ctx.globalAlpha=lb.hidden?.7:1;ctx.beginPath();ctx.arc(x,y,r,0,2*PI);ctx.fillStyle=col;ctx.fill();ctx.lineWidth=2.5;ctx.strokeStyle="#fff";ctx.stroke();
+      ctx.fillStyle="#fff";ctx.font=`800 ${lb.recent?17:14}px ${getComputedStyle(document.body).fontFamily}`;ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(lb.num,x,y+1);ctx.globalAlpha=1}
+  }
+}
+
+/* ============================ Ablauf ============================ */
+const $=id=>document.getElementById(id);
+const cv=$("cv"),ctx=cv.getContext("2d"),stage=$("stage");
+let W=800,H=500,DPR=1;
+function resize(){const r=stage.getBoundingClientRect();DPR=Math.min(window.devicePixelRatio||1,2);W=r.width;H=r.height;cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR)}
+new ResizeObserver(resize).observe(stage);resize();
+
+const App={ch:null,models:{},step:0,t:0,playing:false,answered:{},maxReached:0,tempo:1,speech:false,
+  from:null,to:null,cam:makeCam(),uYaw:0,uEl:0,done:{},stepDone:false,speechDone:true,waitT:0,time:0};
+
+function modelOf(key){if(!App.models[key])App.models[key]=App.ch.models[key]();return App.models[key]}
+function countList(model,type){return model.items[type]||[]}
+function applyEnd(s,st){
+  const e={...st,tally:{...st.tally},det:{...st.det}};
+  if(s.to){if(s.to.model&&s.to.model!==e.model){e.model=s.to.model}Object.assign(e,s.to);e.count=null}
+  if(s.q||s.summary)e.count=null;
+  if(s.count){const m=modelOf(e.model),list=countList(m,s.count);e.count={type:s.count,n:list.length,list};e.tally[s.count]=list.length;
+    e.det[s.count]=groupText(m,s.count,list,list.length)}
+  return e;
+}
+function initState(){return {model:"main",...IN,...(App.ch.init||{}),count:null,tally:{},det:{}}}
+function stateBefore(k){let st=initState();for(let i=0;i<k;i++)st=applyEnd(App.ch.steps[i],st);return st}
+function groupText(model,type,list,n){
+  const labels=model.groups[type]||[];const cnt={};list.slice(0,n).forEach(it=>{cnt[it.g]=(cnt[it.g]||0)+1});
+  const parts=Object.keys(cnt).sort((a,b)=>a-b).map(g=>`${labels[g]||""} ${cnt[g]}`);return parts.join(" + ");
+}
+
+function loadChapter(i,autostart){
+  speechStop();App.ch=CH[i];App.models={};App.answered={};App.maxReached=0;App.uYaw=0;App.uEl=0;App.cam=makeCam();
+  document.querySelectorAll(".pick").forEach((b,k)=>b.setAttribute("aria-pressed",k===i?"true":"false"));
+  $("startTitle").textContent=App.ch.name;$("startText").textContent=App.ch.intro;
+  $("tallyTitle").textContent="Zählbrett: "+App.ch.name;
+  $("sumOv").hidden=true;
+  goStep(0,false);
+  $("startOv").hidden=!!autostart;setPlaying(!!autostart);
+  if(autostart)beginStep();
+  try{history.replaceState(null,"","#"+App.ch.id)}catch(e){}
+}
+function goStep(k,start=true){
+  const steps=App.ch.steps;k=clamp(k,0,steps.length-1);
+  App.step=k;App.maxReached=Math.max(App.maxReached,k);
+  const s=steps[k];
+  App.from=stateBefore(k);
+  if(s.q||s.summary)App.from.count=null;
+  if(s.to&&s.to.model&&s.to.model!==App.from.model){App.from.model=s.to.model;["fold","pairs","overlap","peel","stand"].forEach(key=>{if(key in s.to)App.from[key]=s.to[key]})}
+  if(s.to)App.from.count=null;
+  App.to=applyEnd(s,App.from);
+  if(s.count)App.from.count={type:s.count,n:0,list:App.to.count.list};
+  App.t=0;App.stepDone=false;App.waitT=0;App.uYaw=0;App.uEl=0;App.manual=!App.playing;App._tallied=false;
+  // Anzeige
+  $("caption").textContent=s.q?"":(s.text||"");$("caption").hidden=!!s.q;
+  showQuestion(s.q?k:null);
+  $("sumOv").hidden=!s.summary;if(s.summary)fillSummary();
+  updateTally(App.from);
+  renderDots();updateButtons();
+  if(start)beginStep();
+}
+function beginStep(){const s=App.ch.steps[App.step];speechStop();App.speechDone=true;
+  if(App.speech){const txt=s.q?s.q.text:(s.text||"");if(txt)speak(txt)}}
+function stepDur(s){const tf=App.tempo;
+  let d=0;if(s.to)d=Math.max(d,(s.dur||2)*tf);
+  if(s.count){const n=App.to.count.list.length;d=Math.max(d,(n*.62+1.2)*tf+(n?0:.6))}
+  const words=(s.text||"").split(/\s+/).length;const read=s.summary?0:(1.3+words*.42)*tf;
+  return {anim:d,total:Math.max(d,read)}}
+
+function tick(dt){
+  const s=App.ch.steps[App.step];App.time+=dt;
+  const d=stepDur(s);
+  if((App.playing||App.manual)&&!s.q&&!s.summary)App.t+=dt;
+  const e=d.anim>0?ease(clamp(App.t/d.anim,0,1)):1;
+  const v={...App.from};
+  ["fold","stand","peel","yaw","el","pairs","overlap"].forEach(k=>{v[k]=lerp(App.from[k],App.to[k],e)});
+  v.model=App.to.model;
+  if(s.count){const list=App.to.count.list;const n=clamp(App.t/(.62*App.tempo)+.2,0,list.length+.5);v.count={type:s.count,n,list};
+    const shown=Math.min(list.length,Math.floor(n));
+    const m=modelOf(v.model);
+    if(shown>=list.length&&App.t>list.length*.62*App.tempo+.6){if(!App._tallied){App._tallied=true;updateTally(App.to,s.count)}}
+    else{App._tallied=false;const tl={...App.from.tally};tl[s.count]=shown;const dt_={...App.from.det};dt_[s.count]=groupText(m,s.count,list,shown);updateTally({tally:tl,det:dt_})}
+    showGroupline(m,s.count,list,shown);
+  }else{hideGroupline()}
+  App.vis=v;
+  // Schritt fertig?
+  if(!s.q&&!s.summary&&App.t>=d.total&&App.speechDone){
+    if(!App.stepDone){App.stepDone=true;App.waitT=0}
+    if(App.playing){App.waitT+=dt;if(App.waitT>.7&&App.step<App.ch.steps.length-1)goStep(App.step+1)}
+  }
+}
+let lastT=performance.now();
+function frame(now){const dt=Math.min(.05,(now-lastT)/1000);lastT=now;
+  tick(dt);
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.clearRect(0,0,W,H);
+  const m=modelOf(App.vis.model);
+  const qOpen=!$("qpanel").hidden&&getComputedStyle($("qpanel")).position==="absolute";
+  renderScene(ctx,W,H,m,App.vis,App.cam,{uYaw:App.uYaw,uEl:App.uEl,time:App.time,offY:qOpen?-Math.min(H*.2,$("qpanel").offsetHeight*.5):0,fitH:qOpen?Math.max(.3,(H-$("qpanel").offsetHeight-30)*.86/H):.72});
+  requestAnimationFrame(frame)}
+
+/* ---------- Anzeige-Bausteine ---------- */
+function updateTally(st,flashType){
+  const map={faces:["valF","detF","rowF"],edges:["valK","detK","rowK"],vertices:["valE","detE","rowE"]};
+  for(const t in map){const [v,d,r]=map[t].map($);const val=st.tally?st.tally[t]:undefined;
+    if(val===undefined){v.textContent="?";v.classList.add("empty");d.textContent=""}else{v.textContent=val;v.classList.remove("empty");d.textContent=st.det&&st.det[t]?st.det[t]:(val===0?"keine":"")}
+    if(flashType===t){r.classList.add("flash");setTimeout(()=>r.classList.remove("flash"),900)}}
+}
+function showGroupline(m,type,list,shown){const gl=$("groupline");const col=COL[type];
+  const name={faces:"Flächen",edges:"Kanten",vertices:"Ecken"}[type];
+  if(!list.length){gl.hidden=false;gl.innerHTML=`${name}: <span class="n" style="background:${col}">0</span>`;return}
+  const labels=m.groups[type]||[];const cnt={};list.slice(0,shown).forEach(it=>{cnt[it.g]=(cnt[it.g]||0)+1});
+  const parts=Object.keys(cnt).sort((a,b)=>a-b).map(g=>`${labels[g]} <span class="n" style="background:${col}">${cnt[g]}</span>`);
+  gl.hidden=false;gl.innerHTML=`${name}: ${parts.join(" + ")||"…"}${shown>=list.length&&Object.keys(cnt).length>1?` = <span class="n" style="background:${col}">${shown}</span>`:""}`}
+function hideGroupline(){$("groupline").hidden=true}
+
+function showQuestion(k){
+  const qp=$("qpanel");if(k===null){qp.hidden=true;return}
+  const qd=App.ch.steps[k].q;const st=App.answered[k]||{wrong:[],done:false,solved:false};App.answered[k]=st;
+  qp.hidden=false;$("qtext").textContent=qd.text;const opts=$("opts");opts.innerHTML="";
+  qd.opts.forEach((o,i)=>{const b=document.createElement("button");b.className="opt"+(qd.small?" small":"");b.type="button";
+    const lbl=typeof o==="string"?o:o.label;if(o.sw){const s=document.createElement("span");s.className="sw";s.style.background=o.sw;b.appendChild(s)}
+    b.appendChild(document.createTextNode(lbl));b.dataset.i=i;b.onclick=()=>answer(k,i);opts.appendChild(b)});
+  renderQState(k);
+}
+function renderQState(k){const qd=App.ch.steps[k].q,st=App.answered[k];const fb=$("fb");
+  [...$("opts").children].forEach(b=>{const i=+b.dataset.i;b.classList.toggle("wrong",st.wrong.includes(i));b.classList.toggle("right",st.done&&i===qd.correct);b.disabled=st.done||st.wrong.includes(i)});
+  if(st.done){fb.hidden=false;fb.className="fb "+(st.solved?"ok":"sol");fb.textContent=(st.solved?"Richtig! ":"Die Lösung: ")+qd.explain;$("qnext").hidden=false}
+  else if(st.wrong.length){fb.hidden=false;fb.className="fb hint";fb.textContent="Noch nicht. Tipp: "+qd.hint;$("qnext").hidden=true}
+  else{fb.hidden=true;$("qnext").hidden=true}
+  updateButtons();}
+function answer(k,i){const qd=App.ch.steps[k].q,st=App.answered[k];if(st.done)return;
+  if(i===qd.correct){st.done=true;st.solved=true}else{st.wrong.push(i);if(st.wrong.length>=2){st.done=true;st.solved=false}}
+  renderQState(k);
+  if(App.speech){const fb=$("fb").textContent;speak(fb)}
+  if(st.done)setTimeout(()=>$("qnext").focus(),50);
+}
+function fillSummary(){const s=App.ch.sum;$("sumTitle").textContent="Steckbrief: "+App.ch.name;
+  $("sumList").innerHTML=[["Flächen",s.F],["Kanten",s.K],["Ecken",s.E]].map(([n,v])=>`<dt>${n}</dt><dd><b>${v[0]}</b>${v[1]?` <span style="color:var(--muted)">(${v[1]})</span>`:""}</dd>`).join("");
+  $("sumNote").textContent=s.net;
+  const i=CH.indexOf(App.ch);const nx=CH[i+1];
+  $("sumNext").innerHTML=nx?`Weiter mit: ${nx.name} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>`:"Zurück zum Würfel";
+  App.done[App.ch.id]=true;renderPicker();setPlaying(false);
+}
+function renderDots(){const d=$("dots");d.innerHTML="";
+  App.ch.steps.forEach((s,i)=>{const b=document.createElement("button");b.className="dot"+(s.q?" q":"")+(i===App.step?" cur":i<=App.maxReached?" seen":"");
+    b.textContent=i+1;b.disabled=i>App.maxReached;b.setAttribute("aria-label",`Schritt ${i+1}${s.q?" (Aufgabe)":""}`);
+    b.onclick=()=>{$("startOv").hidden=true;goStep(i)};d.appendChild(b)})}
+function updateButtons(){const s=App.ch.steps[App.step];const st=App.answered[App.step];
+  $("bBack").disabled=App.step===0;
+  $("bNext").disabled=App.step>=App.ch.steps.length-1||(s.q&&!(st&&st.done));
+}
+function setPlaying(p){App.playing=p;App.manual=false;$("playLbl").textContent=p?"Pause":"Abspielen";
+  $("icoPlay").innerHTML=p?'<rect x="6" y="4.5" width="4.2" height="15" rx="1"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1"/>':'<path d="M7 4.5v15l13-7.5z"/>';
+  if(!p)speechStop()}
+
+/* ---------- Vorlesen ---------- */
+let voice=null;
+function pickVoice(){try{const vs=speechSynthesis.getVoices();voice=vs.find(v=>/^de(-|_|$)/i.test(v.lang)&&/female|anna|petra|helena|katja|google/i.test(v.name))||vs.find(v=>/^de/i.test(v.lang))||null}catch(e){}}
+if("speechSynthesis" in window){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}else{$("bSpeak").hidden=true}
+function speak(text){if(!("speechSynthesis" in window))return;speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);u.lang="de-DE";if(voice)u.voice=voice;u.rate=App.tempo>1?.82:.95;
+  App.speechDone=false;const tok=App._tok=(App._tok||0)+1;
+  const fin=()=>{if(App._tok===tok)App.speechDone=true};u.onend=fin;u.onerror=fin;
+  setTimeout(fin,(3+text.split(/\s+/).length*.75)*1000);
+  speechSynthesis.speak(u)}
+function speechStop(){if("speechSynthesis" in window)speechSynthesis.cancel();App.speechDone=true;App._tok=(App._tok||0)+1}
+
+/* ---------- Steuerung ---------- */
+$("startBtn").onclick=()=>{$("startOv").hidden=true;setPlaying(true);beginStep()};
+$("bPlay").onclick=()=>{if(!$("startOv").hidden){$("startBtn").click();return}
+  const s=App.ch.steps[App.step];const p=!App.playing;setPlaying(p);
+  if(p){if(App.stepDone&&!s.q&&!s.summary&&App.step<App.ch.steps.length-1)goStep(App.step+1);else if(App.speech&&!App.stepDone)beginStep()}};
+$("bNext").onclick=()=>{$("startOv").hidden=true;goStep(App.step+1)};
+$("bBack").onclick=()=>{$("startOv").hidden=true;goStep(App.step-1)};
+$("qnext").onclick=()=>{if(!App.playing)setPlaying(true);goStep(App.step+1)};
+$("sumNext").onclick=()=>{const i=CH.indexOf(App.ch);loadChapter(CH[i+1]?i+1:0,true)};
+$("sumAgain").onclick=()=>{loadChapter(CH.indexOf(App.ch),true)};
+$("tSlow").onclick=()=>{App.tempo=1.6;$("tSlow").setAttribute("aria-pressed","true");$("tNorm").setAttribute("aria-pressed","false")};
+$("tNorm").onclick=()=>{App.tempo=1;$("tNorm").setAttribute("aria-pressed","true");$("tSlow").setAttribute("aria-pressed","false")};
+$("bSpeak").onclick=()=>{App.speech=!App.speech;$("bSpeak").setAttribute("aria-pressed",App.speech);
+  if(App.speech){const s=App.ch.steps[App.step];speak(s.q?s.q.text:(s.text||""))}else speechStop()};
+document.addEventListener("keydown",e=>{if(e.target.closest&&e.target.closest("button,input"))return;
+  if(e.code==="Space"){e.preventDefault();$("bPlay").click()}
+  if(e.key==="ArrowRight"&&!$("bNext").disabled)$("bNext").click();
+  if(e.key==="ArrowLeft"&&!$("bBack").disabled)$("bBack").click()});
+// Drehen mit Finger/Maus
+let drag=null;
+stage.addEventListener("pointerdown",e=>{if(e.target!==cv)return;drag={x:e.clientX,y:e.clientY,yaw:App.uYaw,el:App.uEl};stage.classList.add("dragging");cv.setPointerCapture(e.pointerId);$("dragtip").hidden=true});
+stage.addEventListener("pointermove",e=>{if(!drag)return;App.uYaw=drag.yaw-(e.clientX-drag.x)*.5;App.uEl=clamp(drag.el+(e.clientY-drag.y)*.35,-60,60)});
+const endDrag=()=>{drag=null;stage.classList.remove("dragging")};
+stage.addEventListener("pointerup",endDrag);stage.addEventListener("pointercancel",endDrag);
+
+/* ---------- Auswahl mit Vorschaubildern ---------- */
+function renderPicker(){const nav=$("picker");
+  if(!nav.children.length){CH.forEach((c,i)=>{const b=document.createElement("button");b.className="pick";b.type="button";
+    b.innerHTML=`<canvas width="128" height="104"></canvas><b>${c.short}</b><span class="done"></span>`;b.onclick=()=>loadChapter(i,false);nav.appendChild(b);
+    const cvs=b.querySelector("canvas"),cx=cvs.getContext("2d");const m=c.models.main();
+    const v={...IN,fold:1,stand:1,peel:0,yaw:30,el:22,pairs:0,overlap:0,count:null};
+    renderScene(cx,128,104,m,v,makeCam(),{icon:true,snap:true,fitW:.82,fitH:.8})})}
+  [...nav.children].forEach((b,i)=>{b.querySelector(".done").textContent=App.done[CH[i].id]?"✓ angesehen":""})}
+
+renderPicker();
+const startIdx=Math.max(0,CH.findIndex(c=>"#"+c.id===location.hash));
+loadChapter(startIdx,false);
+App.vis={...stateBefore(0)};
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
