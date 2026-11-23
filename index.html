@@ -1107,6 +1107,8 @@ const startIdx=Math.max(0,CH.findIndex(c=>hashParts.includes(c.id)));
 loadChapter(startIdx,false);
 App.vis={...stateBefore(0)};
 requestAnimationFrame(frame);
+/* In LearningView eingebettet: Aufgabenfenster maximal groß (Embed-API setDialogSize). Es wird nichts gespeichert. */
+try{if(window.parent!==window)window.parent.postMessage({type:"setDialogSize",size:"max"},"https://learningview.org")}catch(e){}
 </script>
 </body>
 </html>
