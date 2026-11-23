@@ -955,7 +955,16 @@ const VI={big:'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="
   close:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'};
 const VSIZES=[.42,.6,.85];
 function vidFrame(){return $("qvid").querySelector("iframe")}
-function vidRate(){const f=vidFrame();if(!f)return;ytCmd(f,"setPlaybackRate",[(App.vslow||App.tempo>1)?.5:1])}
+/* Eingebettete Videos (LearningView-Fassung): const VIDLOCAL=["data:video/mp4;base64,…", …] in Reihenfolge V01–V09 */
+const LOCALV=typeof VIDLOCAL!=="undefined"&&Array.isArray(VIDLOCAL)&&VIDLOCAL.length===VIDS.length;
+const VURL={};
+function localUrl(i){if(VURL[i])return VURL[i];const d=VIDLOCAL[i];
+  try{const b=atob(d.slice(d.indexOf(",")+1));const a=new Uint8Array(b.length);for(let k=0;k<b.length;k++)a[k]=b.charCodeAt(k);
+    VURL[i]=URL.createObjectURL(new Blob([a],{type:"video/mp4"}))}catch(e){VURL[i]=d}
+  return VURL[i]}
+function vidLocalEl(){return $("qvid").querySelector("video")}
+function vidRate(){const r=(App.vslow||App.tempo>1)?.5:1;const v=vidLocalEl();if(v){v.playbackRate=r;return}
+  const f=vidFrame();if(!f)return;ytCmd(f,"setPlaybackRate",[r])}
 function vidPlayBtn(){const b=$("vPlay");if(b){b.innerHTML=App.vpaused?VI.play:VI.pause;b.setAttribute("aria-label",App.vpaused?"Video abspielen":"Video anhalten")}}
 function vidBuild(){const box=$("qvid");if(box.querySelector(".vstage"))return;
   box.innerHTML='<div class="vbar"><span class="grip">'+VI.grip+'<span>Gebärde</span></span>'
@@ -967,7 +976,7 @@ function vidBuild(){const box=$("qvid");if(box.querySelector(".vstage"))return;
    +'<div class="vstage"><div class="vframe"></div><button type="button" class="vshield" aria-label="Video groß zeigen"><span class="vbig">'+VI.big+'</span></button></div>';
   vidPlayBtn();
   box.querySelector(".vshield").onclick=()=>{if(!box.classList.contains("float"))setFloat(true)};
-  $("vPlay").onclick=()=>{App.vpaused=!App.vpaused;const f=vidFrame();if(f)ytCmd(f,App.vpaused?"pauseVideo":"playVideo");vidPlayBtn()};
+  $("vPlay").onclick=()=>{App.vpaused=!App.vpaused;const v=vidLocalEl();if(v){if(App.vpaused)v.pause();else v.play().catch(()=>{})}else{const f=vidFrame();if(f)ytCmd(f,App.vpaused?"pauseVideo":"playVideo")}vidPlayBtn()};
   $("vSlow").onclick=()=>{App.vslow=!App.vslow;$("vSlow").setAttribute("aria-pressed",App.vslow);vidRate()};
   $("vSmall").onclick=()=>vidSize(-1);$("vLarge").onclick=()=>vidSize(1);
   $("vClose").onclick=()=>setFloat(false);
@@ -991,6 +1000,13 @@ function setFloat(on){const box=$("qvid");box.classList.toggle("float",on);
 function showVideo(qd){const box=$("qvid");const id=App.video&&qd?vidFor(qd):null;
   if(!id){const fr=box.querySelector(".vframe");if(fr)fr.innerHTML="";box.dataset.id="";box.hidden=true;if(!App.video)setFloat(false);return}
   vidBuild();box.hidden=false;if(box.dataset.id===id)return;box.dataset.id=id;App.vpaused=false;vidPlayBtn();
+  if(LOCALV){const i=VIDS.indexOf(id);const fr=box.querySelector(".vframe");const v=document.createElement("video");
+    v.muted=true;v.defaultMuted=true;v.loop=true;v.autoplay=true;v.playsInline=true;v.setAttribute("playsinline","");v.setAttribute("muted","");
+    v.preload="auto";v.setAttribute("aria-label","Gebärdenvideo zur Aufgabe");v.style.cssText="width:100%;height:100%;object-fit:contain;display:block;background:#1b2636";
+    v.src=localUrl(i);v.addEventListener("loadedmetadata",vidRate);
+    v.onerror=()=>{if(v.src!==VIDLOCAL[i]){v.src=VIDLOCAL[i];v.play().catch(()=>{})}};
+    fr.innerHTML="";fr.appendChild(v);v.play().catch(()=>{});
+    if(box.classList.contains("float")){vidApplySize();vidPlace(App.vpos.x,App.vpos.y)}return}
   const org=location.origin&&location.origin!=="null"?"&origin="+encodeURIComponent(location.origin):"";
   const f=document.createElement("iframe");
   f.src=YT+"/embed/"+id+"?autoplay=1&mute=1&playsinline=1&rel=0&controls=0&disablekb=1&fs=0&iv_load_policy=3&enablejsapi=1"+org;
@@ -1113,6 +1129,7 @@ loadChapter(startIdx,false);
 App.vis={...stateBefore(0)};
 requestAnimationFrame(frame);
 /* In LearningView eingebettet: Aufgabenfenster maximal groß (Embed-API setDialogSize). Es wird nichts gespeichert. */
+if(LOCALV){const ft=document.querySelector("footer.foot");if(ft)ft.textContent="Diese Seite speichert nichts und sendet keine Daten. Das Vorlesen nutzt die Sprachausgabe deines Geräts. Die Gebärdenvideos sind in dieser Datei enthalten."}
 try{if(window.parent!==window)window.parent.postMessage({type:"setDialogSize",size:"max"},"https://learningview.org")}catch(e){}
 </script>
 </body>
