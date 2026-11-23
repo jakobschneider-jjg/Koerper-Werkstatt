@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Baut die LearningView-Fassung der Körper-Werkstatt mit eingebetteten Gebärdenvideos.
 
-Aufruf: python3 tools/learningview.py <Ordner mit 1.mp4 … 9.mp4 (Reihenfolge wie Drehliste)> <Zieldatei.html>
+Aufruf: python3 tools/learningview.py <Ordner mit V01_flaechen.mp4 … V09_kugel_flach.mp4 (oder 1.mp4 … 9.mp4, Reihenfolge wie Drehliste)> <Zieldatei.html>
 Die Videos werden auf 640 × 360 ohne Ton verkleinert (ffmpeg) und als Daten in die Datei geschrieben.
 Videos und die gebaute Datei gehören NICHT in dieses öffentliche Repository.
 """
@@ -12,7 +12,7 @@ html = open(os.path.join(ROOT, "index.html"), encoding="utf-8").read()
 data = []
 with tempfile.TemporaryDirectory() as t:
     for i in range(1, 10):
-        f = [p for p in glob.glob(os.path.join(src, "*")) if re.fullmatch(r"0?%d(\D.*)?\.(mp4|mov|m4v)" % i, os.path.basename(p), re.I)]
+        f = [p for p in glob.glob(os.path.join(src, "*")) if re.fullmatch(r"(V)?0?%d(\D.*)?\.(mp4|mov|m4v)" % i, os.path.basename(p), re.I)]
         if len(f) != 1: sys.exit("Video %d nicht eindeutig gefunden: %s" % (i, f))
         o = os.path.join(t, "%d.mp4" % i)
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", f[0], "-an", "-vf", "scale=640:360:flags=lanczos,fps=30",
