@@ -114,6 +114,9 @@ button{font:inherit;color:inherit}
 .qpanel.hassym .qhead{display:none}
 @media (max-width:560px){.qpanel{position:static;margin-top:10px;max-height:none;box-shadow:none}}
 .qbody{display:flex;gap:14px;align-items:center}
+.qvid{flex:none;width:clamp(170px,24vw,260px);aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#1b2636;border:2px solid var(--line)}
+.qvid iframe{width:100%;height:100%;border:0;display:block}
+@media (max-width:560px){.qbody{flex-wrap:wrap}.qvid{width:100%}}
 .qsym{flex:none;display:grid;grid-template-columns:auto auto;align-items:center;column-gap:6px;padding:4px 10px 4px 6px;border:3px solid var(--line);border-radius:14px;background:#fff;text-align:center}
 .qsym svg{width:40px;height:40px;grid-row:span 2}
 .qsym b{font-size:16px;line-height:1.1;text-align:left}
@@ -188,7 +191,7 @@ button{font:inherit;color:inherit}
       </div>
         <div class="qpanel" id="qpanel" hidden role="dialog" aria-labelledby="qtext">
           <div class="qhead"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.2 9.2a3 3 0 0 1 5.6 1.3c0 2-2.8 2.5-2.8 4"/><circle cx="12" cy="18" r=".6" fill="currentColor"/></svg>Aufgabe</div>
-          <div class="qbody"><div class="qsym" id="qsym" hidden></div><p class="qtext" id="qtext"></p></div>
+          <div class="qbody"><div class="qvid" id="qvid" hidden></div><div class="qsym" id="qsym" hidden></div><p class="qtext" id="qtext"></p></div>
           <div class="opts" id="opts"></div>
           <p class="fb" id="fb" hidden></p>
           <div class="row"><button class="btn primary" id="qnext" hidden>Weiter
@@ -213,6 +216,7 @@ button{font:inherit;color:inherit}
       <div class="helps" role="group" aria-label="Hilfen">
         <span class="lab">Hilfen</span>
         <button class="btn" id="bSimple" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19 8.5 6h1L14 19M5.6 14.5h6.8"/><path d="M16 11h5M16 15h5M16 19h3"/></svg>Einfache Sprache</button>
+        <button class="btn" id="bVideo" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="M16 10.5l5-3v9l-5-3z"/></svg>Gebärdenvideo</button>
         <button class="btn" id="bAuto" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l7 6-7 6zM13 6l7 6-7 6z"/></svg><span id="autoLbl">Läuft von allein weiter</span></button>
       </div>
     </section>
@@ -248,7 +252,7 @@ button{font:inherit;color:inherit}
       </div>
     </aside>
   </main>
-  <footer class="foot">Diese Seite speichert nichts und sendet keine Daten. Das Vorlesen nutzt die Sprachausgabe deines Geräts.</footer>
+  <footer class="foot">Diese Seite speichert nichts. Das Vorlesen nutzt die Sprachausgabe deines Geräts. Die Gebärdenvideos kommen von YouTube (youtube-nocookie.com) und werden erst geladen, wenn „Gebärdenvideo“ eingeschaltet ist.</footer>
 </div>
 
 <script>
@@ -921,11 +925,31 @@ function showGroupline(m,type,list,shown){const gl=$("groupline");const col=COL[
   gl.hidden=false;gl.innerHTML=`${name}: ${parts.join(" + ")||"…"}${shown>=list.length&&Object.keys(cnt).length>1?` = <span class="n" style="background:${col}">${shown}</span>`:""}`}
 function hideGroupline(){$("groupline").hidden=true}
 
+/* ---------- Gebärdenvideos (YouTube ohne Cookies; Reihenfolge wie Drehliste V01–V09) ---------- */
+const VIDS=["VqWXe51kt74","9KWksB6G6L0","h8ujz7HmJFE","zqbUc5XBavo","8J4oXu69xuw","8bpceRre1xc","_AyqlQESGVE","a-sCEfCIhQ0","YliTEvoKe0E"];
+const VID_RULES=[[/Wie viele Flächen/,0],[/Wie viele Kanten/,1],[/Wie viele Ecken/,2],[/gegenüber der roten/,3],[/aus diesem Netz einen Würfel/,4],[/beim Quader anders/,5],[/Spitzen der Dreiecke/,6],[/mit dem Rechteck/,7],[/Kugel aufklappen/,8]];
+const YT="https://www.youtube-nocookie.com";
+function vidFor(qd){const r=VID_RULES.find(x=>x[0].test(qd.text));return r?VIDS[r[1]]:null}
+function ytCmd(f,func,args){try{f.contentWindow.postMessage(JSON.stringify(func?{event:"command",func,args:args||[]}:{event:"listening",id:1}),YT)}catch(e){}}
+function vidRate(){const f=$("qvid").querySelector("iframe");if(!f)return;ytCmd(f,"setPlaybackRate",[App.tempo>1?.5:1])}
+function showVideo(qd){const box=$("qvid");const id=App.video&&qd?vidFor(qd):null;
+  if(!id){if(box.dataset.id){box.innerHTML="";box.dataset.id=""}box.hidden=true;return}
+  box.hidden=false;if(box.dataset.id===id)return;box.dataset.id=id;
+  const org=location.origin&&location.origin!=="null"?"&origin="+encodeURIComponent(location.origin):"";
+  const f=document.createElement("iframe");
+  f.src=YT+"/embed/"+id+"?autoplay=1&mute=1&loop=1&playlist="+id+"&playsinline=1&rel=0&enablejsapi=1"+org;
+  f.title="Gebärdenvideo zur Aufgabe";f.allow="autoplay; encrypted-media; picture-in-picture; fullscreen";f.allowFullscreen=true;
+  f.referrerPolicy="strict-origin-when-cross-origin";
+  f.onload=()=>{ytCmd(f);[900,2200,4000].forEach(t=>setTimeout(vidRate,t))};
+  box.innerHTML="";box.appendChild(f)}
+function setVideo(on){App.video=on;$("bVideo").setAttribute("aria-pressed",on);
+  if(App.ch){setHash();const s=App.ch.steps[App.step];showVideo(s&&s.q?s.q:null)}}
+
 function showQuestion(k){
-  const qp=$("qpanel");if(k===null){qp.hidden=true;return}
+  const qp=$("qpanel");if(k===null){qp.hidden=true;showVideo(null);return}
   const qd=App.ch.steps[k].q;const st=App.answered[k]||{wrong:[],done:false,solved:false};App.answered[k]=st;
   const h=qd.help||{};
-  qp.hidden=false;$("qtext").textContent=qT(qd,"text");const opts=$("opts");opts.innerHTML="";
+  qp.hidden=false;showVideo(qd);$("qtext").textContent=qT(qd,"text");const opts=$("opts");opts.innerHTML="";
   qp.classList.toggle("hassym",!!h.sym);const sym=$("qsym");if(h.sym){sym.hidden=false;sym.className="qsym "+h.sym;sym.innerHTML=SYM[h.sym]+`<b>${SYMTXT[h.sym][0]}</b><span>${SYMTXT[h.sym][1]}</span>`}else{sym.hidden=true;sym.innerHTML=""}
   qd.opts.forEach((o,i)=>{const b=document.createElement("button");b.type="button";
     const pic=h.img&&h.img[i];b.className="opt"+(pic?" pic":(qd.small||(App.simple&&h.s&&h.s.opts)?" small":""));
@@ -987,8 +1011,8 @@ $("bBack").onclick=()=>{$("startOv").hidden=true;goStep(App.step-1)};
 $("qnext").onclick=()=>{if(!App.playing)setPlaying(true);goStep(App.step+1)};
 $("sumNext").onclick=()=>{const i=CH.indexOf(App.ch);loadChapter(CH[i+1]?i+1:0,true)};
 $("sumAgain").onclick=()=>{loadChapter(CH.indexOf(App.ch),true)};
-$("tSlow").onclick=()=>{App.tempo=1.6;$("tSlow").setAttribute("aria-pressed","true");$("tNorm").setAttribute("aria-pressed","false")};
-$("tNorm").onclick=()=>{App.tempo=1;$("tNorm").setAttribute("aria-pressed","true");$("tSlow").setAttribute("aria-pressed","false")};
+$("tSlow").onclick=()=>{App.tempo=1.6;setTimeout(vidRate,0);$("tSlow").setAttribute("aria-pressed","true");$("tNorm").setAttribute("aria-pressed","false")};
+$("tNorm").onclick=()=>{App.tempo=1;setTimeout(vidRate,0);$("tNorm").setAttribute("aria-pressed","true");$("tSlow").setAttribute("aria-pressed","false")};
 $("bSpeak").onclick=()=>{App.speech=!App.speech;$("bSpeak").setAttribute("aria-pressed",App.speech);
   if(App.speech){const s=App.ch.steps[App.step];speak(s.q?qT(s.q,"text"):(s.text||""))}else speechStop()};
 document.addEventListener("keydown",e=>{if(e.target.closest&&e.target.closest("button,input"))return;
@@ -1002,11 +1026,12 @@ stage.addEventListener("pointermove",e=>{if(!drag)return;App.uYaw=drag.yaw-(e.cl
 const endDrag=()=>{drag=null;stage.classList.remove("dragging")};
 stage.addEventListener("pointerup",endDrag);stage.addEventListener("pointercancel",endDrag);
 
-function setHash(){try{history.replaceState(null,"","#"+App.ch.id+(App.simple?"-einfach":""))}catch(e){}}
+function setHash(){try{history.replaceState(null,"","#"+App.ch.id+(App.simple?"-einfach":"")+(App.video?"-gebaerde":""))}catch(e){}}
 function setSimple(on){App.simple=on;$("bSimple").setAttribute("aria-pressed",on);if(App.ch){setHash();if(App.ch.steps[App.step].q)showQuestion(App.step)}}
 function setAuto(on){App.auto=on;$("bAuto").setAttribute("aria-pressed",on);$("autoLbl").textContent=on?"Läuft von allein weiter":"Weiter selbst antippen"}
 $("bSimple").onclick=()=>{const on=!App.simple;setSimple(on);if(on)setAuto(false)};
 $("bAuto").onclick=()=>setAuto(!App.auto);
+$("bVideo").onclick=()=>setVideo(!App.video);
 
 /* ---------- Auswahl mit Vorschaubildern ---------- */
 function renderPicker(){const nav=$("picker");
@@ -1020,6 +1045,7 @@ function renderPicker(){const nav=$("picker");
 renderPicker();
 const hashParts=location.hash.replace("#","").toLowerCase().split("-");
 if(hashParts.includes("einfach")){setSimple(true);setAuto(false)}
+if(hashParts.includes("gebaerde"))setVideo(true);
 const startIdx=Math.max(0,CH.findIndex(c=>hashParts.includes(c.id)));
 loadChapter(startIdx,false);
 App.vis={...stateBefore(0)};
